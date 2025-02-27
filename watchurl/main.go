@@ -125,6 +125,10 @@ func setupDatabase() error {
 			content TEXT,
 			FOREIGN KEY(url_id) REFERENCES monitored_urls(id)
 		);`,
+		`CREATE TABLE IF NOT EXISTS url_last_check (
+			url_id INTEGER PRIMARY KEY,
+			last_check DATETIME NOT NULL
+		);`,
 	}
 	for _, q := range queries {
 		if _, err := db.Exec(q); err != nil {
@@ -134,8 +138,16 @@ func setupDatabase() error {
 	return nil
 }
 
-// monitorURL periodically checks the given URL and saves a snapshot if content changes.
-// monitorURL periodically checks the given URL and saves a snapshot if the (filtered) content changes.
+// updateLastCheck persists the current time as the last check time for the given URL.
+func updateLastCheck(urlID int) {
+	mu.Lock()
+	defer mu.Unlock()
+	_, err := db.Exec("INSERT OR REPLACE INTO url_last_check (url_id, last_check) VALUES (?, ?)", urlID, time.Now())
+	if err != nil {
+		log.Printf("Error updating last check for URL id %d: %v", urlID, err)
+	}
+}
+
 func monitorURL(m MonitoredURL) {
 	var lastContent string
 
@@ -145,7 +157,27 @@ func monitorURL(m MonitoredURL) {
 		log.Printf("Error retrieving last snapshot for URL id %d: %v", m.ID, err)
 	}
 
-	// Take an initial snapshot immediately.
+	// Retrieve the last check time from the new table.
+	var lastCheck time.Time
+	err = db.QueryRow("SELECT last_check FROM url_last_check WHERE url_id = ?", m.ID).Scan(&lastCheck)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("Error retrieving last check for URL id %d: %v", m.ID, err)
+	}
+
+	// If a last check was recorded, wait if the frequency interval hasn't elapsed.
+	if err != sql.ErrNoRows {
+		elapsed := time.Since(lastCheck)
+		if elapsed < m.Frequency {
+			waitTime := m.Frequency - elapsed
+			log.Printf("Last check for %s was %v ago; waiting %v before next check", m.URL, elapsed.Round(time.Second), waitTime.Round(time.Second))
+			time.Sleep(waitTime)
+		}
+	}
+
+	// Update the last check timestamp (this applies even before the first snapshot).
+	updateLastCheck(m.ID)
+
+	// Take an initial snapshot.
 	log.Printf("Taking initial snapshot for URL: %s", m.URL)
 	resp, err := fetchURL(m.URL)
 	if err != nil {
@@ -156,9 +188,7 @@ func monitorURL(m MonitoredURL) {
 		if err != nil {
 			log.Printf("Error reading response from %s: %v", m.URL, err)
 		} else {
-			currentContent := string(bodyBytes)
-			// Extract <body> content and strip out non-visible tags like <meta>.
-			currentContent = extractBody(currentContent)
+			currentContent := extractBody(string(bodyBytes))
 			if currentContent != lastContent {
 				lastContent = currentContent
 				saveSnapshot(m.ID, currentContent)
@@ -171,8 +201,9 @@ func monitorURL(m MonitoredURL) {
 	ticker := time.NewTicker(m.Frequency)
 	defer ticker.Stop()
 
-	for {
-		<-ticker.C
+	for range ticker.C {
+		// Update last check time at the beginning of each cycle.
+		updateLastCheck(m.ID)
 
 		log.Printf("Checking URL: %s", m.URL)
 		resp, err := fetchURL(m.URL)
@@ -187,13 +218,12 @@ func monitorURL(m MonitoredURL) {
 			continue
 		}
 
-		currentContent := string(bodyBytes)
-		// Filter the content: extract the body and remove non-visible tags.
-		currentContent = extractBody(currentContent)
+		currentContent := extractBody(string(bodyBytes))
 		if currentContent != lastContent {
 			log.Printf("Change detected for %s", m.URL)
 			lastContent = currentContent
 			saveSnapshot(m.ID, currentContent)
+			sendPushoverNotification(m.URL, time.Now())
 		}
 	}
 }
