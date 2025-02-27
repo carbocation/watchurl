@@ -316,15 +316,15 @@ func extractBody(input string) string {
 	return buf.String()
 }
 
-// removeMetaNodes traverses the node tree under n and removes any <meta> elements.
+// removeMetaNodes traverses the node tree under n and removes any <meta> or <script> elements.
 func removeMetaNodes(n *html.Node) {
 	if n == nil {
 		return
 	}
 	var newChildren []*html.Node
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		// Skip any <meta> tags.
-		if c.Type == html.ElementNode && c.Data == "meta" {
+		// Skip any <meta> or <script> tags.
+		if c.Type == html.ElementNode && (c.Data == "meta" || c.Data == "script") {
 			continue
 		}
 		newChildren = append(newChildren, c)
