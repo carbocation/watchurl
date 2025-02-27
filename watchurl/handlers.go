@@ -16,7 +16,7 @@ import (
 // indexHandler renders the index page using the index template.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
-        SELECT mu.id, mu.url, mu.frequency, s.last_updated
+        SELECT mu.id, mu.url, mu.frequency, s.last_updated, mu.push_enabled
         FROM monitored_urls mu
         LEFT JOIN (
             SELECT url_id, MAX(timestamp) as last_updated
@@ -33,13 +33,14 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u MonitoredURLView
 		var lastUpdatedStr sql.NullString
-		var freqSeconds int
-		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastUpdatedStr)
+		var freqSeconds, pushInt int
+		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastUpdatedStr, &pushInt)
 		if err != nil {
 			log.Printf("Error scanning row: %v", err)
 			continue
 		}
 		u.Frequency = freqSeconds
+		u.PushEnabled = pushInt != 0
 		if lastUpdatedStr.Valid {
 			// Split the string at the " m=" portion to remove the monotonic clock info.
 			cleanTimeStr := strings.Split(lastUpdatedStr.String, " m=")[0]
@@ -75,9 +76,15 @@ func addURLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the push notifications setting.
+	pushVal := 0
+	if r.FormValue("push") != "" {
+		pushVal = 1
+	}
+
 	// Serialize this write using the same mutex.
 	mu.Lock()
-	res, err := db.Exec("INSERT INTO monitored_urls (url, frequency) VALUES (?, ?)", urlStr, freq)
+	res, err := db.Exec("INSERT INTO monitored_urls (url, frequency, push_enabled) VALUES (?, ?, ?)", urlStr, freq, pushVal)
 	mu.Unlock()
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -87,9 +94,10 @@ func addURLHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := res.LastInsertId()
 	if err == nil {
 		m := MonitoredURL{
-			ID:        int(id),
-			URL:       urlStr,
-			Frequency: time.Duration(freq) * time.Second,
+			ID:          int(id),
+			URL:         urlStr,
+			Frequency:   time.Duration(freq) * time.Second,
+			PushEnabled: pushVal == 1,
 		}
 		go monitorURL(m)
 	}
@@ -225,4 +233,36 @@ func diffHandler(w http.ResponseWriter, r *http.Request) {
 	if err := diffTmpl.Execute(w, data); err != nil {
 		log.Printf("Template execution error: %v", err)
 	}
+}
+
+func togglePushHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var current int
+	err = db.QueryRow("SELECT push_enabled FROM monitored_urls WHERE id = ?", id).Scan(&current)
+	if err != nil {
+		http.Error(w, "URL not found", http.StatusNotFound)
+		return
+	}
+
+	// Toggle: if current is 1, switch to 0; otherwise switch to 1.
+	newVal := 1
+	if current != 0 {
+		newVal = 0
+	}
+
+	mu.Lock()
+	_, err = db.Exec("UPDATE monitored_urls SET push_enabled = ? WHERE id = ?", newVal, id)
+	mu.Unlock()
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

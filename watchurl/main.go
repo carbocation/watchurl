@@ -30,9 +30,10 @@ var (
 // MonitoredURL represents a URL to be watched. Frequency is stored as a time.Duration (in nanoseconds).
 // When a user enters a frequency in seconds, it is converted by multiplying with time.Second.
 type MonitoredURL struct {
-	ID        int
-	URL       string
-	Frequency time.Duration
+	ID          int
+	URL         string
+	Frequency   time.Duration
+	PushEnabled bool
 }
 
 // MonitoredURLView is used to pass URL data (with frequency in seconds) to the index template.
@@ -41,6 +42,7 @@ type MonitoredURLView struct {
 	URL         string
 	Frequency   int
 	LastUpdated string
+	PushEnabled bool
 }
 
 // Snapshot represents a URL snapshot for display.
@@ -88,7 +90,7 @@ func main() {
 	}
 
 	// Load monitored URLs from the database and start monitoring.
-	rows, err := db.Query("SELECT id, url, frequency FROM monitored_urls")
+	rows, err := db.Query("SELECT id, url, frequency, push_enabled FROM monitored_urls")
 	if err != nil {
 		log.Fatalf("Error querying monitored URLs: %v", err)
 	}
@@ -96,12 +98,13 @@ func main() {
 
 	for rows.Next() {
 		var m MonitoredURL
-		var freqSeconds int
-		if err := rows.Scan(&m.ID, &m.URL, &freqSeconds); err != nil {
+		var freqSeconds, pushInt int
+		if err := rows.Scan(&m.ID, &m.URL, &freqSeconds, &pushInt); err != nil {
 			log.Printf("Error scanning row: %v", err)
 			continue
 		}
 		m.Frequency = time.Duration(freqSeconds) * time.Second
+		m.PushEnabled = pushInt != 0
 		go monitorURL(m)
 	}
 
@@ -111,6 +114,7 @@ func main() {
 	http.HandleFunc("/delete", deleteURLHandler)
 	http.HandleFunc("/history", historyHandler)
 	http.HandleFunc("/diff", diffHandler)
+	http.HandleFunc("/togglePush", togglePushHandler)
 
 	log.Printf("Server starting on :%s", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
@@ -122,7 +126,8 @@ func setupDatabase() error {
 		`CREATE TABLE IF NOT EXISTS monitored_urls (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT NOT NULL,
-			frequency INTEGER NOT NULL
+			frequency INTEGER NOT NULL,
+			push_enabled INTEGER NOT NULL DEFAULT 1
 		);`,
 		`CREATE TABLE IF NOT EXISTS url_snapshots (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,6 +157,16 @@ func updateLastCheck(urlID int) {
 	if err != nil {
 		log.Printf("Error updating last check for URL id %d: %v", urlID, err)
 	}
+}
+
+func shouldSendPush(urlID int) bool {
+	var pushInt int
+	err := db.QueryRow("SELECT push_enabled FROM monitored_urls WHERE id = ?", urlID).Scan(&pushInt)
+	if err != nil {
+		log.Printf("Error checking push setting for URL id %d: %v", urlID, err)
+		return true // default to sending push if in doubt
+	}
+	return pushInt != 0
 }
 
 func monitorURL(m MonitoredURL) {
@@ -229,7 +244,9 @@ func monitorURL(m MonitoredURL) {
 			log.Printf("Change detected for %s", m.URL)
 			lastContent = currentContent
 			saveSnapshot(m.ID, currentContent)
-			sendPushoverNotification(m.URL, time.Now())
+			if shouldSendPush(m.ID) {
+				sendPushoverNotification(m.URL, time.Now())
+			}
 		}
 	}
 }

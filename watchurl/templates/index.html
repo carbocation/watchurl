@@ -10,6 +10,8 @@
         <li>
             {{.URL}} (every {{.Frequency}} seconds)
             - Last updated: {{.LastUpdated}}
+            - Push notifications: {{if .PushEnabled}}Enabled{{else}}Disabled{{end}}
+            - <a href="/togglePush?id={{.ID}}">Toggle Notifications</a>
             - <a href="/history?id={{.ID}}">History</a>
             - <a href="/delete?id={{.ID}}">Delete</a>
         </li>
@@ -21,6 +23,7 @@
     <form action="/add" method="POST">
         URL: <input type="text" name="url"><br>
         Frequency (seconds): <input type="number" name="frequency"><br>
+        Push notifications: <input type="checkbox" name="push" value="1" checked><br>
         <input type="submit" value="Add">
     </form>
 </body>
