@@ -62,8 +62,10 @@ func addURLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Insert the new monitored URL; frequency is stored as seconds.
+	// Serialize this write using the same mutex.
+	mu.Lock()
 	res, err := db.Exec("INSERT INTO monitored_urls (url, frequency) VALUES (?, ?)", urlStr, freq)
+	mu.Unlock()
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
