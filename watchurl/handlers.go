@@ -92,12 +92,15 @@ func deleteURLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mu.Lock()
 	_, err = db.Exec("DELETE FROM monitored_urls WHERE id = ?", id)
 	if err != nil {
+		mu.Unlock()
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 	_, err = db.Exec("DELETE FROM url_snapshots WHERE url_id = ?", id)
+	mu.Unlock()
 	if err != nil {
 		log.Printf("Error deleting snapshots for URL id %d: %v", id, err)
 	}
