@@ -14,7 +14,6 @@ import (
 
 // indexHandler renders the index page using the index template.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	// Query to fetch the most recent snapshot timestamp for each monitored URL.
 	rows, err := db.Query(`
         SELECT mu.id, mu.url, mu.frequency, s.last_updated
         FROM monitored_urls mu
@@ -32,17 +31,23 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	var urls []MonitoredURLView
 	for rows.Next() {
 		var u MonitoredURLView
-		var lastUpdated sql.NullTime
+		var lastUpdatedStr sql.NullString
 		var freqSeconds int
-		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastUpdated)
+		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastUpdatedStr)
 		if err != nil {
 			log.Printf("Error scanning row: %v", err)
 			continue
 		}
 		u.Frequency = freqSeconds
-		if lastUpdated.Valid {
-			// Display the relative time of the last content update.
-			u.LastUpdated = humanize.Time(lastUpdated.Time)
+		if lastUpdatedStr.Valid {
+			// Parse the timestamp string. Adjust the layout if your stored format is different.
+			parsed, err := time.Parse("2006-01-02 15:04:05", lastUpdatedStr.String)
+			if err != nil {
+				// If parsing fails, fallback to the raw string.
+				u.LastUpdated = lastUpdatedStr.String
+			} else {
+				u.LastUpdated = humanize.Time(parsed)
+			}
 		} else {
 			u.LastUpdated = "Never"
 		}
