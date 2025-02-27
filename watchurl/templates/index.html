@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>URL Monitor</title>
+</head>
+<body>
+    <h1>Monitored URLs</h1>
+    <ul>
+    {{range .}}
+        <li>{{.URL}} (every {{.Frequency}} seconds)
+            - <a href="/history?id={{.ID}}">History</a>
+            - <a href="/delete?id={{.ID}}">Delete</a>
+        </li>
+    {{else}}
+        <li>No URLs found.</li>
+    {{end}}
+    </ul>
+    <h2>Add URL</h2>
+    <form action="/add" method="POST">
+        URL: <input type="text" name="url"><br>
+        Frequency (seconds): <input type="number" name="frequency"><br>
+        <input type="submit" value="Add">
+    </form>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>URL History</title>
+</head>
+<body>
+    <h1>History for {{.URL}}</h1>
+    <ul>
+    {{range $index, $s := .Snapshots}}
+        <li>
+            <strong>Snapshot #{{$index}} - {{$s.Snapshot.Timestamp}}</strong><br>
+            <div style="background:#f4f4f4; padding:10px;">
+                {{$s.Snapshot.Content}}
+            </div>
+            {{if $s.NextID}}
+                <a href="/diff?id1={{$s.Snapshot.ID}}&id2={{$s.NextID}}">
+                    Diff with previous snapshot
+                </a>
+            {{end}}
+        </li>
+    {{else}}
+        <li>No snapshots found.</li>
+    {{end}}
+    </ul>
+    <a href="/">Back</a>
+</body>
+</html>
