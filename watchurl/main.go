@@ -37,9 +37,10 @@ type MonitoredURL struct {
 
 // MonitoredURLView is used to pass URL data (with frequency in seconds) to the index template.
 type MonitoredURLView struct {
-	ID        int
-	URL       string
-	Frequency int
+	ID          int
+	URL         string
+	Frequency   int
+	LastUpdated string
 }
 
 // Snapshot represents a URL snapshot for display.

@@ -7,7 +7,9 @@
     <h1>Monitored URLs</h1>
     <ul>
     {{range .}}
-        <li>{{.URL}} (every {{.Frequency}} seconds)
+        <li>
+            {{.URL}} (every {{.Frequency}} seconds)
+            - Last updated: {{.LastUpdated}}
             - <a href="/history?id={{.ID}}">History</a>
             - <a href="/delete?id={{.ID}}">Delete</a>
         </li>

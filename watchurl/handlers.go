@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"html/template"
 	"log"
 	"net/http"
@@ -12,7 +13,11 @@ import (
 
 // indexHandler renders the index page using the index template.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, url, frequency FROM monitored_urls")
+	// Join the monitored_urls with url_last_check so that we can get the last check time.
+	rows, err := db.Query(`
+        SELECT mu.id, mu.url, mu.frequency, url_last_check.last_check 
+        FROM monitored_urls mu
+        LEFT JOIN url_last_check ON mu.id = url_last_check.url_id`)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -21,22 +26,25 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	var urls []MonitoredURLView
 	for rows.Next() {
-		var id int
-		var url string
-		var freq int
-		if err := rows.Scan(&id, &url, &freq); err != nil {
+		var u MonitoredURLView
+		var lastCheck sql.NullTime
+		var freqSeconds int
+		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastCheck)
+		if err != nil {
+			log.Printf("Error scanning row: %v", err)
 			continue
 		}
-		urls = append(urls, MonitoredURLView{
-			ID:        id,
-			URL:       url,
-			Frequency: freq,
-		})
+		u.Frequency = freqSeconds
+		if lastCheck.Valid {
+			u.LastUpdated = lastCheck.Time.Format("2006-01-02 15:04:05")
+		} else {
+			u.LastUpdated = "Never"
+		}
+		urls = append(urls, u)
 	}
 
-	w.Header().Set("Content-Type", "text/html")
 	if err := indexTmpl.Execute(w, urls); err != nil {
-		log.Printf("Template execution error: %v", err)
+		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
 
