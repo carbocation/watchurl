@@ -13,7 +13,7 @@
                 {{$s.Snapshot.Content}}
             </div>
             {{if $s.NextID}}
-                <a href="/diff?id1={{$s.Snapshot.ID}}&id2={{$s.NextID}}">
+                <a href="/diff?id1={{$s.NextID}}&id2={{$s.Snapshot.ID}}">
                     Diff with previous snapshot
                 </a>
             {{end}}
