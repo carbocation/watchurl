@@ -3,6 +3,7 @@ module github.com/carbocation/watchurl
 go 1.21.0
 
 require (
+	github.com/joho/godotenv v1.5.1
 	github.com/sergi/go-diff v1.3.1
 	golang.org/x/net v0.35.0
 	modernc.org/sqlite v1.36.0
