@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -48,5 +49,16 @@ func sendPushoverNotification(monitoredURL string, changeTime time.Time) {
 		return
 	}
 	defer resp.Body.Close()
-	log.Printf("Pushover notification sent, status: %s", resp.Status)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading response body: %v", err)
+	} else {
+		log.Printf("Pushover response: %s", body)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Received non-OK HTTP status: %s", resp.Status)
+	} else {
+		log.Printf("Pushover notification sent successfully, status: %s", resp.Status)
+	}
 }
