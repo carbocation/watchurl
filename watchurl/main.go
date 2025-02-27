@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"embed"
+	"flag"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -68,6 +69,10 @@ var (
 )
 
 func main() {
+	// Parse the port flag from the command line.
+	port := flag.String("port", "8080", "server port")
+	flag.Parse()
+
 	var err error
 	// Open (or create) the SQLite database file using modernc's pure Go driver.
 	db, err = sql.Open("sqlite", "./monitor.db")
@@ -106,8 +111,8 @@ func main() {
 	http.HandleFunc("/history", historyHandler)
 	http.HandleFunc("/diff", diffHandler)
 
-	log.Println("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Printf("Server starting on :%s", *port)
+	log.Fatal(http.ListenAndServe(":"+*port, nil))
 }
 
 // setupDatabase creates necessary tables if they don't exist.
