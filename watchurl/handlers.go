@@ -14,11 +14,15 @@ import (
 
 // indexHandler renders the index page using the index template.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	// Join the monitored_urls with url_last_check so that we can get the last check time.
+	// Query to fetch the most recent snapshot timestamp for each monitored URL.
 	rows, err := db.Query(`
-        SELECT mu.id, mu.url, mu.frequency, url_last_check.last_check 
+        SELECT mu.id, mu.url, mu.frequency, s.last_updated
         FROM monitored_urls mu
-        LEFT JOIN url_last_check ON mu.id = url_last_check.url_id`)
+        LEFT JOIN (
+            SELECT url_id, MAX(timestamp) as last_updated
+            FROM url_snapshots
+            GROUP BY url_id
+        ) s ON mu.id = s.url_id`)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -28,17 +32,17 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	var urls []MonitoredURLView
 	for rows.Next() {
 		var u MonitoredURLView
-		var lastCheck sql.NullTime
+		var lastUpdated sql.NullTime
 		var freqSeconds int
-		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastCheck)
+		err := rows.Scan(&u.ID, &u.URL, &freqSeconds, &lastUpdated)
 		if err != nil {
 			log.Printf("Error scanning row: %v", err)
 			continue
 		}
 		u.Frequency = freqSeconds
-		if lastCheck.Valid {
-			// Use humanize.Time to display relative time (e.g., "2 minutes ago")
-			u.LastUpdated = humanize.Time(lastCheck.Time)
+		if lastUpdated.Valid {
+			// Display the relative time of the last content update.
+			u.LastUpdated = humanize.Time(lastUpdated.Time)
 		} else {
 			u.LastUpdated = "Never"
 		}
