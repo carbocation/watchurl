@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -40,10 +41,11 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		u.Frequency = freqSeconds
 		if lastUpdatedStr.Valid {
-			// Parse the timestamp string. Adjust the layout if your stored format is different.
-			parsed, err := time.Parse("2006-01-02 15:04:05", lastUpdatedStr.String)
+			// Split the string at the " m=" portion to remove the monotonic clock info.
+			cleanTimeStr := strings.Split(lastUpdatedStr.String, " m=")[0]
+			// Use a layout that matches the cleaned string.
+			parsed, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", cleanTimeStr)
 			if err != nil {
-				// If parsing fails, fallback to the raw string.
 				u.LastUpdated = lastUpdatedStr.String
 			} else {
 				u.LastUpdated = humanize.Time(parsed)
