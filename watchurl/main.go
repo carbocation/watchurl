@@ -82,6 +82,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error opening database: %v", err)
 	}
+	// Set SQLite to wait up to 5000 milliseconds for a lock.
+	if _, err = db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		log.Fatalf("Error setting busy timeout: %v", err)
+	}
 	defer db.Close()
 
 	// Initialize database tables.
