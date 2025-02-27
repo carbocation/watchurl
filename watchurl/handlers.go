@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -36,7 +37,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		u.Frequency = freqSeconds
 		if lastCheck.Valid {
-			u.LastUpdated = lastCheck.Time.Format("2006-01-02 15:04:05")
+			// Use humanize.Time to display relative time (e.g., "2 minutes ago")
+			u.LastUpdated = humanize.Time(lastCheck.Time)
 		} else {
 			u.LastUpdated = "Never"
 		}
