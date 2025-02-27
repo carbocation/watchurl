@@ -86,6 +86,9 @@ func main() {
 	if _, err = db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
 		log.Fatalf("Error setting busy timeout: %v", err)
 	}
+	if _, err = db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+		log.Fatalf("Error setting WAL mode: %v", err)
+	}
 	defer db.Close()
 
 	// Initialize database tables.
