@@ -26,6 +26,8 @@ go.work.sum
 
 # sqlite DB
 *.db
+*.db-shm
+*.db-wal
 
 # Environment variable file
 watchurl/.env
