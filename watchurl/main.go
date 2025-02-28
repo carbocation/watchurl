@@ -185,14 +185,14 @@ func monitorURL(m MonitoredURL) {
 		log.Printf("Error retrieving last snapshot for URL id %d: %v", m.ID, err)
 	}
 
-	// Retrieve the last check time from the new table.
+	// Retrieve the last check time.
 	var lastCheck time.Time
 	err = db.QueryRow("SELECT last_check FROM url_last_check WHERE url_id = ?", m.ID).Scan(&lastCheck)
 	if err != nil && err != sql.ErrNoRows {
 		log.Printf("Error retrieving last check for URL id %d: %v", m.ID, err)
 	}
 
-	// If a last check was recorded, wait if the frequency interval hasn't elapsed.
+	// Wait if the frequency interval hasn't elapsed.
 	if err != sql.ErrNoRows {
 		elapsed := time.Since(lastCheck)
 		if elapsed < m.Frequency {
@@ -230,7 +230,19 @@ func monitorURL(m MonitoredURL) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// Update last check time at the beginning of each cycle.
+		// Check if the URL still exists.
+		var exists int
+		err := db.QueryRow("SELECT 1 FROM monitored_urls WHERE id = ?", m.ID).Scan(&exists)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Printf("Monitored URL with id %d has been deleted; stopping monitoring", m.ID)
+				return // exit the goroutine if the URL is deleted
+			}
+			log.Printf("Error checking existence for URL id %d: %v", m.ID, err)
+			continue
+		}
+
+		// Update last check time.
 		updateLastCheck(m.ID)
 
 		log.Printf("Checking URL: %s", m.URL)
